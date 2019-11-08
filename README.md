@@ -1,5 +1,9 @@
 # WP Simple Google Analytics
-Simple Google Analytics implementation for Wordpress that avoids using cookies and external javascript.
+Simple Google Analytics implementation for Wordpress that avoids using cookies and external javascript. 
+
+Localstorage is used instead of a tracking cookie if the browser implements it. If Localstorage is not available, a first party cookie is used.
+
+A locally cached copy of analytics.js is printed using an inline script tag instead of referencing it externally from https://www.google-analytics.com/analytics.js. This copy of analytics.js is updated every 24 hours. If analytics.js is unable to be cached locally, it is referenced externally and marked as async to limit the affect on the site's first contentful paint time.
 
 ## Configuration
 Configuration is done by defining PHP constants in your /wp-config.php file. Below is an example configuration:
