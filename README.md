@@ -5,6 +5,8 @@ Localstorage is used instead of a tracking cookie if the browser implements it. 
 
 A locally cached copy of analytics.js is printed using an inline script tag instead of referencing it externally from https://www.google-analytics.com/analytics.js. This copy of analytics.js is updated every 24 hours. If analytics.js is unable to be cached locally, it is referenced externally and marked as async to limit the affect on the site's first contentful paint time.
 
+Google Analytics USER-ID tracking is implemented by anonymizing the wordpress user id for logged in users.
+
 ## Configuration
 Configuration is done by defining PHP constants in your /wp-config.php file. Below is an example configuration:
 ```php
