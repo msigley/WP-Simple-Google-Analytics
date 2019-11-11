@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics implementation that avoids using cookies and external javascript.
-Version: 1.0.3
+Version: 1.1.0
 Author: Matthew Sigley
 License: GPL2
 */
@@ -11,6 +11,7 @@ License: GPL2
 class WPSimpleGoogleAnalytics {
 	private static $object = null;
 	private $tracking_id = null;
+	private $analytics_js_url = 'https://www.google-analytics.com/analytics.js';
 	private $analytics_js = null;
 	private $request_ip = null;
 	private $track_internal_ips = false;
@@ -18,6 +19,9 @@ class WPSimpleGoogleAnalytics {
 	private $do_not_track_reason = false;
 
 	private function __construct() {
+		//Plugin activation/deactivation
+		register_deactivation_hook( __FILE__, array($this, 'deactivation') );
+
 		add_action( 'wp_print_styles', array( $this, 'print_analytics_js' ), 1 );
 
 		if( defined( 'GOOGLE_ANALYTICS_TRACKING_ID' ) )
@@ -32,6 +36,9 @@ class WPSimpleGoogleAnalytics {
 			$this->do_not_track_reason = 'In admin area or responding to an ajax request.';
 			return;
 		}
+
+		if( defined( 'GOOGLE_ANALYTICS_DEBUG' ) && !empty( GOOGLE_ANALYTICS_DEBUG ) )
+			$this->analytics_js_url = 'https://www.google-analytics.com/analytics_debug.js';
 
 		if( defined( 'GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS' ) )
 			$this->track_internal_ips = !empty( GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS );
@@ -131,10 +138,14 @@ class WPSimpleGoogleAnalytics {
 		return self::$object;
 	}
 
+	public function deactivation() {
+		wp_cache_flush();
+	}
+
 	private function get_analytics_js() {
-		$analytics_js = wp_cache_get( 'analytics_js', 'wp_simple_google_analytics' );
+		$analytics_js = wp_cache_get( $this->analytics_js_url, 'wp_simple_google_analytics_js' );
 		if( empty( $analytics_js ) ) {
-			$response = wp_remote_get( 'https://www.google-analytics.com/analytics.js' );
+			$response = wp_remote_get( $this->analytics_js_url );
 			if( is_wp_error( $response ) )
 				return false;
 			
@@ -143,7 +154,7 @@ class WPSimpleGoogleAnalytics {
 				return false;
 			
 			$analytics_js = wp_remote_retrieve_body( $response );
-			wp_cache_set( 'analytics_js', $analytics_js, 'wp_simple_google_analytics', DAY_IN_SECONDS );
+			wp_cache_set( $this->analytics_js_url, $analytics_js, 'wp_simple_google_analytics_js', DAY_IN_SECONDS );
 		}
 		return $analytics_js;
 	}
@@ -179,7 +190,8 @@ class WPSimpleGoogleAnalytics {
 					'trackingId': '<?php echo $this->tracking_id; ?>',
 					'storage': 'none',
 					'storeGac': false,
-					'clientId': localStorage.getItem('ga:clientId')
+					'clientId': localStorage.getItem('ga:clientId'),
+					'siteSpeedSampleRate': 10
 				});
 				googleAnalytics(function(tracker) {
 					localStorage.setItem('ga:clientId', tracker.get('clientId'));
@@ -188,10 +200,20 @@ class WPSimpleGoogleAnalytics {
 				googleAnalytics('create', {
 					'trackingId': '<?php echo $this->tracking_id; ?>',
 					'cookieDomain': '<?php echo $_SERVER['HTTP_HOST']; ?>',
-					'storeGac': false
+					'storeGac': false,
+					'siteSpeedSampleRate': 10
 				});
 			}
 
+			<?php
+			if( $user_id = get_current_user_id() ) :
+				?>
+				googleAnalytics('set', 'userId', <?php echo md5( $user_id ); ?>);
+				<?php
+			endif;
+			?>
+
+			googleAnalytics('set', 'anonymizeIp', true);
 			googleAnalytics('set', 'allowAdFeatures', false);
 			googleAnalytics('set', 'forceSSL', true);
 			googleAnalytics('set', 'transport', 'beacon');
@@ -200,13 +222,14 @@ class WPSimpleGoogleAnalytics {
 		<?php
 		if( !empty( $this->analytics_js ) ) :
 			?>
+			<!-- <?php echo $this->analytics_js_url; ?> -->
 			<script>
 				<?php echo $this->analytics_js; ?>
 			</script>
 			<?php
 		else :
 			?>
-			<script async src='https://www.google-analytics.com/analytics.js'></script>
+			<script async src="<?php echo $this->analytics_js_url; ?>"></script>
 			<?php
 		endif;
 		?>
