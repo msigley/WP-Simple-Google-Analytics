@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics implementation that avoids using cookies and external javascript.
-Version: 1.1.0
+Version: 1.1.1
 Author: Matthew Sigley
 License: GPL2
 */
@@ -208,7 +208,7 @@ class WPSimpleGoogleAnalytics {
 			<?php
 			if( $user_id = get_current_user_id() ) :
 				?>
-				googleAnalytics('set', 'userId', <?php echo md5( $user_id ); ?>);
+				googleAnalytics('set', 'userId', '<?php echo md5( $user_id ); ?>');
 				<?php
 			endif;
 			?>
