@@ -33,5 +33,7 @@ Array of IPv4 addresses that will never be tracked. Useful to eliminate business
 
 ## Opt out link
 A link for your users to opt out of Google Analytics tracking is required by Google Analytics' terms of service. 
+
 https://marketingplatform.google.com/about/analytics/terms/us/
-The linkcan be added by using the ```[google_analytics_opt_out_link]``` shortcode on your privacy policy page.
+
+The link can be added by using the ```[google_analytics_opt_out_link]``` shortcode on your privacy policy page.
