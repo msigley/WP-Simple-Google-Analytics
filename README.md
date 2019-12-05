@@ -30,3 +30,8 @@ The Google Analytics Tracking ID you wish to use for this website.
 Whether or not internal IP addresses should be tracked. Defaults to false to avoid inflating the tracking with loopback requests. You may wish to turn this on to test your site while developing locally or if you have a proxy or CDN implemented on your website.
 #### GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS
 Array of IPv4 addresses that will never be tracked. Useful to eliminate businesses from inflating the tracking with traffic coming from themseleves.
+
+## Opt out link
+A link for your users to opt out of Google Analytics tracking is required by Google Analytics' terms of service. 
+https://marketingplatform.google.com/about/analytics/terms/us/
+The linkcan be added by using the ```[google_analytics_opt_out_link]``` shortcode on your privacy policy page.
