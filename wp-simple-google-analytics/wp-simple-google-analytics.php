@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics implementation that avoids using cookies and external javascript.
-Version: 1.1.1
+Version: 1.2.0
 Author: Matthew Sigley
 License: GPL2
 */
@@ -17,23 +17,41 @@ class WPSimpleGoogleAnalytics {
 	private $track_internal_ips = false;
 	private $do_not_track_ips = false;
 	private $do_not_track_reason = false;
+	private $opt_out_cookie_name = 'ga_opt_out';
+	private $shortcodes = array( 'google_analytics_opt_out_link' );
 
 	private function __construct() {
+		//General API
+		require_once 'api.php';
+
 		//Plugin activation/deactivation
 		register_deactivation_hook( __FILE__, array($this, 'deactivation') );
 
 		add_action( 'wp_print_styles', array( $this, 'print_analytics_js' ), 1 );
 
+		add_action( 'init', array( $this, 'add_shortcodes' ) );
+
 		if( defined( 'GOOGLE_ANALYTICS_TRACKING_ID' ) )
 			$this->tracking_id = GOOGLE_ANALYTICS_TRACKING_ID;
 		
-		if( empty( $this->tracking_id ) || is_admin() ) {
+		if( empty( $this->tracking_id ) ) {
 			$this->do_not_track_reason = 'Missing tracking id.';
 			return;
 		}
 
 		if( is_admin() ) {
 			$this->do_not_track_reason = 'In admin area or responding to an ajax request.';
+			return;
+		}
+
+		if( isset( $_REQUEST['ga_opt_out'] ) ) {
+			setrawcookie( $this->opt_out_cookie_name, '1', $lifetime = time() + WEEK_IN_SECONDS, SITECOOKIEPATH, 
+				false, ( 'https' === parse_url( get_option( 'siteurl' ), PHP_URL_SCHEME ) ), true );
+			$_COOKIE[$this->opt_out_cookie_name] = '1';
+		}
+
+		if( $this->has_user_opted_out() ) {
+			$this->do_not_track_reason = 'User opted out.';
 			return;
 		}
 
@@ -142,6 +160,19 @@ class WPSimpleGoogleAnalytics {
 		wp_cache_flush();
 	}
 
+	public function add_shortcodes() {
+		foreach( $this->shortcodes as $shortcode )
+			add_shortcode( $shortcode, array( $this, 'shortcode_callback' ) );
+	}
+
+	public function shortcode_callback( $atts, $content, $shortcode_tag ) {
+		$params = array();
+		if( is_array( $atts ) )
+			$params = $atts;
+		$output = call_user_func( $shortcode_tag, $params );
+		return $output;
+	}
+
 	private function get_analytics_js() {
 		$analytics_js = wp_cache_get( $this->analytics_js_url, 'wp_simple_google_analytics_js' );
 		if( empty( $analytics_js ) ) {
@@ -235,6 +266,39 @@ class WPSimpleGoogleAnalytics {
 		?>
 		<!-- End Google Analytics -->
 		<?php
+	}
+
+	public function has_user_opted_out() {
+		return !empty( $_COOKIE[$this->opt_out_cookie_name] );
+	}
+
+	/**
+	 * Helper functions
+	 */
+
+	public function self_uri(){
+		$url = 'http';
+		$script_name = '';
+		if ( isset( $_SERVER['REQUEST_URI'] ) ):
+			$script_name = $_SERVER['REQUEST_URI'];
+		else:
+			$script_name = $_SERVER['PHP_SELF'];
+			if ( $_SERVER['QUERY_STRING'] > ' ' ):
+				$script_name .= '?' . $_SERVER['QUERY_STRING'];
+			endif;
+		endif;
+
+		if ( ( isset( $_SERVER['HTTPS'] ) && $_SERVER['HTTPS'] == 'on' ) || $_SERVER['SERVER_PORT'] == '443' )
+			$url .= 's';
+
+		$url .= '://';
+		if ( $_SERVER['SERVER_PORT'] != '80' && $_SERVER['SERVER_PORT'] != '443' ):
+			$url .= $_SERVER['HTTP_HOST'] . ':' . $_SERVER['SERVER_PORT'] . $script_name;
+		else:
+			$url .= $_SERVER['HTTP_HOST'] . $script_name;
+		endif;
+
+		return $url;
 	}
 }
 
