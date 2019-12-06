@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics implementation that avoids using cookies and external javascript.
-Version: 1.2.0
+Version: 1.2.2
 Author: Matthew Sigley
 License: GPL2
 */
@@ -45,8 +45,20 @@ class WPSimpleGoogleAnalytics {
 		}
 
 		if( isset( $_REQUEST['ga_opt_out'] ) ) {
-			setrawcookie( $this->opt_out_cookie_name, '1', $lifetime = time() + WEEK_IN_SECONDS, SITECOOKIEPATH, 
-				false, ( 'https' === parse_url( get_option( 'siteurl' ), PHP_URL_SCHEME ) ), true );
+			$site_url = get_option( 'siteurl' );
+			$host = parse_url( $site_url, PHP_URL_HOST );
+			$domain = $host;
+			if( substr_count( $host, '.' ) >= 2 ) {
+				$dot_pos = strrpos( $host, '.' );
+				$domain = substr( $host, $dot_pos + 1 );
+				$host = substr( $host, 0, $dot_pos );
+				if( $next_dot_pos = strrpos( $host, '.' ) )
+					$domain = substr( $host, $next_dot_pos + 1 ) . ".$domain";
+			}
+			$domain = ".$domain";
+
+			setrawcookie( $this->opt_out_cookie_name, '1', $lifetime = time() + WEEK_IN_SECONDS, '/', 
+				$domain, ( 'https' === parse_url( $site_url, PHP_URL_SCHEME ) ), true );
 			$_COOKIE[$this->opt_out_cookie_name] = '1';
 		}
 
