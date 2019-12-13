@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics implementation that avoids using cookies and external javascript.
-Version: 1.2.2
+Version: 1.3.0
 Author: Matthew Sigley
 License: GPL2
 */
@@ -30,6 +30,8 @@ class WPSimpleGoogleAnalytics {
 		add_action( 'wp_print_styles', array( $this, 'print_analytics_js' ), 1 );
 
 		add_action( 'init', array( $this, 'add_shortcodes' ) );
+
+		add_filter( 'wp_headers', array( $this, 'add_referrer_policy_header' ) );
 
 		if( defined( 'GOOGLE_ANALYTICS_TRACKING_ID' ) )
 			$this->tracking_id = GOOGLE_ANALYTICS_TRACKING_ID;
@@ -185,6 +187,12 @@ class WPSimpleGoogleAnalytics {
 		return $output;
 	}
 
+	public function add_referrer_policy_header( $headers ) {
+		$headers['Referrer-Policy'] = 'default, same-origin, strict-origin-when-cross-origin';
+
+		return $headers;
+	}
+
 	private function get_analytics_js() {
 		$analytics_js = wp_cache_get( $this->analytics_js_url, 'wp_simple_google_analytics_js' );
 		if( empty( $analytics_js ) ) {
@@ -248,18 +256,15 @@ class WPSimpleGoogleAnalytics {
 				});
 			}
 
-			<?php
-			if( $user_id = get_current_user_id() ) :
-				?>
+			<?php if( $user_id = get_current_user_id() ) : ?>
 				googleAnalytics('set', 'userId', '<?php echo md5( $user_id ); ?>');
-				<?php
-			endif;
-			?>
+			<?php endif; ?>
 
 			googleAnalytics('set', 'anonymizeIp', true);
 			googleAnalytics('set', 'allowAdFeatures', false);
 			googleAnalytics('set', 'forceSSL', true);
 			googleAnalytics('set', 'transport', 'beacon');
+			googleAnalytics('set', 'page', '<?php echo $this->sanitize_query_vars( $this->self_uri( true ) ); ?>');
 			googleAnalytics('send', 'pageview');
 		</script>
 		<?php
@@ -288,7 +293,25 @@ class WPSimpleGoogleAnalytics {
 	 * Helper functions
 	 */
 
-	public function self_uri(){
+	public function sanitize_query_vars( $url ) {
+		global $wp;
+
+		$question_mark_pos = strpos( $url, '?' );
+		if( false === $question_mark_pos )
+			return $url;
+
+		$query_string = array();
+		$allowed_query_vars = apply_filters( 'google_analytics_allowed_query_parameters', array_flip( $wp->public_query_vars ) );
+		parse_str( substr( $url, $question_mark_pos + 1 ), $query_string );
+		$query_string = array_intersect_key( $query_string, $allowed_query_vars );
+
+		$url = substr( $url, 0, $question_mark_pos );
+		if( !empty( $query_string ) )
+			$url .= '?' . http_build_query( $query_string, null, ini_get('arg_separator.output'), PHP_QUERY_RFC3986 );
+		return $url;
+	}
+
+	public function self_uri( $only_script_name ){
 		$url = 'http';
 		$script_name = '';
 		if ( isset( $_SERVER['REQUEST_URI'] ) ):
@@ -299,6 +322,9 @@ class WPSimpleGoogleAnalytics {
 				$script_name .= '?' . $_SERVER['QUERY_STRING'];
 			endif;
 		endif;
+
+		if( $only_script_name )
+			return $script_name;
 
 		if ( ( isset( $_SERVER['HTTPS'] ) && $_SERVER['HTTPS'] == 'on' ) || $_SERVER['SERVER_PORT'] == '443' )
 			$url .= 's';
