@@ -1,3 +1,4 @@
+[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/A0A01FORH)
 # WP Simple Google Analytics
 Simple Google Analytics implementation for Wordpress that avoids using cookies and external javascript. 
 
