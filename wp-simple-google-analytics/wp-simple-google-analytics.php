@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics implementation that avoids using cookies and external javascript.
-Version: 1.3.0
+Version: 1.4.0
 Author: Matthew Sigley
 License: GPL2
 */
@@ -14,6 +14,7 @@ class WPSimpleGoogleAnalytics {
 	private $analytics_js_url = 'https://www.google-analytics.com/analytics.js';
 	private $analytics_js = null;
 	private $request_ip = null;
+	private $request_ip_packed = null;
 	private $track_internal_ips = false;
 	private $do_not_track_ips = false;
 	private $do_not_track_reason = false;
@@ -21,11 +22,39 @@ class WPSimpleGoogleAnalytics {
 	private $shortcodes = array( 'google_analytics_opt_out_link' );
 
 	private function __construct() {
-		//General API
-		require_once 'api.php';
-
 		//Plugin activation/deactivation
 		register_deactivation_hook( __FILE__, array($this, 'deactivation') );
+
+		if( defined( 'GOOGLE_ANALYTICS_TRACKING_ID' ) )
+			$this->tracking_id = GOOGLE_ANALYTICS_TRACKING_ID;
+
+		if( defined( 'GOOGLE_ANALYTICS_DEBUG' ) && !empty( GOOGLE_ANALYTICS_DEBUG ) )
+			$this->analytics_js_url = 'https://www.google-analytics.com/analytics_debug.js';
+
+		if( defined( 'GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS' ) )
+			$this->track_internal_ips = !empty( GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS );
+
+		if( defined( 'GOOGLE_ANALYTICS_TRACK_BOTS' ) )
+			$this->track_bots = !empty( GOOGLE_ANALYTICS_TRACK_BOTS );
+
+		if( defined( 'GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS' ) )
+			$this->do_not_track_ips = GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS;
+	}
+	
+	static function &object() {
+		if ( ! self::$object instanceof WPSimpleGoogleAnalytics ) {
+			self::$object = new WPSimpleGoogleAnalytics();
+		}
+		return self::$object;
+	}
+
+	public function deactivation() {
+		wp_cache_flush();
+	}
+
+	public function init() {
+		//General API
+		require_once 'api.php';
 
 		add_action( 'wp_print_styles', array( $this, 'print_analytics_js' ), 1 );
 
@@ -33,9 +62,6 @@ class WPSimpleGoogleAnalytics {
 
 		add_filter( 'wp_headers', array( $this, 'add_referrer_policy_header' ) );
 
-		if( defined( 'GOOGLE_ANALYTICS_TRACKING_ID' ) )
-			$this->tracking_id = GOOGLE_ANALYTICS_TRACKING_ID;
-		
 		if( empty( $this->tracking_id ) ) {
 			$this->do_not_track_reason = 'Missing tracking id.';
 			return;
@@ -69,34 +95,28 @@ class WPSimpleGoogleAnalytics {
 			return;
 		}
 
-		if( defined( 'GOOGLE_ANALYTICS_DEBUG' ) && !empty( GOOGLE_ANALYTICS_DEBUG ) )
-			$this->analytics_js_url = 'https://www.google-analytics.com/analytics_debug.js';
-
-		if( defined( 'GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS' ) )
-			$this->track_internal_ips = !empty( GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS );
-
-		$ip = $_SERVER['REMOTE_ADDR'];
+		$this->request_ip = $_SERVER['REMOTE_ADDR'];
 		if( $this->track_internal_ips )
-			$ip = (string) filter_var( $ip, FILTER_VALIDATE_IP );
+			$this->request_ip = (string) filter_var( $this->request_ip, FILTER_VALIDATE_IP );
 		else
-			$ip = (string) filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
-		$this->request_ip = @inet_pton( $ip );
+			$this->request_ip = (string) filter_var( $this->request_ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+		$this->request_ip_packed = @inet_pton( $this->request_ip );
 
-		if( empty( $this->request_ip ) ) {
+		if( empty( $this->request_ip ) || empty( $this->request_ip_packed ) ) {
 			$this->do_not_track_reason = 'Invalid or internal IP address.';
 			return;
 		}
 
-		if( defined( 'GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS' ) && !empty( GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS ) ) {
-			$do_not_track_ips_cache_key = GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS;
-			if( is_array( $do_not_track_ips ) ) // Support serialized arrays for PHP 5.6
-				$do_not_track_ips_cache_key = serialize( $do_not_track_ips );
+		if( !empty( $this->do_not_track_ips ) ) {
+			$do_not_track_ips_cache_key = $this->do_not_track_ips;
+			if( is_array( $do_not_track_ips_cache_key ) ) // Support serialized arrays for PHP 5.6
+				$do_not_track_ips_cache_key = serialize( $do_not_track_ips_cache_key );
 
 			// Try to pull the whitelisted ips array from the cache to avoid building it on every request
 			$do_not_track_ips = wp_cache_get( $do_not_track_ips_cache_key, 'wp_simple_google_analytics_do_not_track_ips' );
 			if( false === $do_not_track_ips ) {
 				// Build whitelisted ips array
-				$do_not_track_ips = GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS;
+				$do_not_track_ips = $this->do_not_track_ips;
 				if( !is_array( $do_not_track_ips ) )
 					$do_not_track_ips = unserialize( $do_not_track_ips ); 
 				foreach( $do_not_track_ips as &$do_not_track_ip ) {
@@ -130,19 +150,20 @@ class WPSimpleGoogleAnalytics {
 				}
 				wp_cache_set( $do_not_track_ips_cache_key, $do_not_track_ips, 'wp_simple_google_analytics_do_not_track_ips', DAY_IN_SECONDS );
 			}
+			$this->do_not_track_ips = $do_not_track_ips;
 
 			// Check if request ip should not be tracked
-			$request_ip_len = strlen( $this->request_ip );
-			$request_ip_binary = unpack( 'H*', $this->request_ip ); // Subnet in Hex
+			$request_ip_packed_len = strlen( $this->request_ip_packed );
+			$request_ip_binary = unpack( 'H*', $this->request_ip_packed ); // Subnet in Hex
 			foreach( $request_ip_binary as $i => $h ) $request_ip_binary[$i] = base_convert($h, 16, 2); // Array of Binary
 			$request_ip_binary = implode( '', $request_ip_binary ); // Subnet in Binary, only network bits
 			$do_not_track = false;
 
-			foreach( $do_not_track_ips as $do_not_track_ip ) {
-				if( $request_ip_len != $do_not_track_ip['ip_len'] ) // Don't compare IPv4 to IPv6 addresses and vice versa
+			foreach( $this->do_not_track_ips as $do_not_track_ip ) {
+				if( $request_ip_packed_len != $do_not_track_ip['ip_len'] ) // Don't compare IPv4 to IPv6 addresses and vice versa
 					continue;
 
-				if( $this->request_ip == $do_not_track_ip['ip'] ) {
+				if( $this->request_ip_packed == $do_not_track_ip['ip'] ) {
 					$do_not_track = true;
 					break;
 				}
@@ -156,22 +177,46 @@ class WPSimpleGoogleAnalytics {
 
 			if( $do_not_track ) {
 				$this->do_not_track_reason = "This IP address is set to not be tracked.";
-				return; // Do nothing id this is not to be tracked
+				return; // Do nothing ip this is not to be tracked
+			}
+		}
+
+		if( !$this->track_bots ) {
+			$user_agent = strtolower( (string) $_SERVER['HTTP_USER_AGENT'] );
+			
+			if( '' === $user_agent
+				|| !empty( $_SERVER['HTTP_X_SCANNER'] ) // Netsparker scanner
+				|| false !== strpos( $user_agent, '@' ) // Legitimate web crawlers add an email or url as contact information to user agent
+				|| false !== strpos( $user_agent, 'http://' )
+				|| false !== strpos( $user_agent, 'https://' )
+				|| !preg_match( '#^[^/]+/[\d\.]+#', $user_agent ) // Valid user agent strings start with <product>/<product-version>
+				|| preg_match( '/\b[\w\-]*(?:bot|crawler|archiver|transcoder|spider|uptime|validator|fetcher|java|python|facebookexternalhit|lighthouse)\b/', $user_agent ) ) {
+				$request_host = (string) wp_cache_get( $this->request_ip, 'wp_simple_google_analytics_gethostbyaddr' );
+				if( '' === $request_host ) {
+					set_error_handler( array( $this, 'throwException' ) );
+					try {
+						// Pull all records at once to avoid multiple domain lookups
+						$request_host = strtolower( (string) gethostbyaddr( $this->request_ip ) );
+					} catch (Exception $e) {
+						// DNS server was unreachable
+					}
+					restore_error_handler();
+					wp_cache_set( $this->request_ip, $request_host, 'wp_simple_google_analytics_gethostbyaddr', DAY_IN_SECONDS );
+				}
+
+				if( '' !== $request_host 
+					&& $this->request_ip !== $request_host 
+					// Allow google traffic for site verification, pagespeed insights, etc.
+					// Google Analytics filters google traffic out anyway.
+					&& 'google.com' !== substr( $request_host, -10 ) 
+					&& 'googlebot.com' !== substr( $request_host, -13 ) ) {
+					$this->do_not_track_reason = "Bot traffic detected or missing User Agent.";
+					return;
+				}
 			}
 		}
 
 		$this->analytics_js = $this->get_analytics_js();
-	}
-	
-	static function &object() {
-		if ( ! self::$object instanceof WPSimpleGoogleAnalytics ) {
-			self::$object = new WPSimpleGoogleAnalytics();
-		}
-		return self::$object;
-	}
-
-	public function deactivation() {
-		wp_cache_flush();
 	}
 
 	public function add_shortcodes() {
@@ -338,6 +383,13 @@ class WPSimpleGoogleAnalytics {
 
 		return $url;
 	}
+
+	public function throwException( $severity, $message, $file, $line ) {
+		if ( !( error_reporting() & $severity ) )
+			return; // This error code is not included in error_reporting
+		throw new ErrorException( $message, 0, $severity, $file, $line );
+	}
 }
 
 $WPSimpleGoogleAnalytics = WPSimpleGoogleAnalytics::object();
+$WPSimpleGoogleAnalytics->init();
