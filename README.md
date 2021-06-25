@@ -16,6 +16,7 @@ Configuration is done by defining PHP constants in your /wp-config.php file. Bel
  */
 define('GOOGLE_ANALYTICS_TRACKING_ID', 'UA-NNNNNNNN-N');
 define('GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS', false);
+define('GOOGLE_ANALYTICS_TRACK_BOTS', false);
 define('GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS',
 	serialize(
 		array(
@@ -29,6 +30,8 @@ define('GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS',
 The Google Analytics Tracking ID you wish to use for this website.
 #### GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS
 Whether or not internal IP addresses should be tracked. Defaults to false to avoid inflating the tracking with loopback requests. You may wish to turn this on to test your site while developing locally or if you have a proxy or CDN implemented on your website.
+#### GOOGLE_ANALYTICS_TRACK_BOTS
+Whether or not bot traffic should be tracked. Defaults to false to avoid inflating the tracking. Uses the user agent string to detect bots. Allow google traffic for site verification, pagespeed insights, etc. Google Analytics filters google traffic out anyway.
 #### GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS
 Array of IPv4 addresses that will never be tracked. Useful to eliminate businesses from inflating the tracking with traffic coming from themseleves.
 
