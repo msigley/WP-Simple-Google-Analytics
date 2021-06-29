@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics implementation that avoids using cookies and external javascript.
-Version: 1.4.0
+Version: 1.4.1
 Author: Matthew Sigley
 License: GPL2
 */
@@ -191,27 +191,29 @@ class WPSimpleGoogleAnalytics {
 				|| false !== strpos( $user_agent, 'https://' )
 				|| !preg_match( '#^[^/]+/[\d\.]+#', $user_agent ) // Valid user agent strings start with <product>/<product-version>
 				|| preg_match( '/\b[\w\-]*(?:bot|crawler|archiver|transcoder|spider|uptime|validator|fetcher|java|python|facebookexternalhit|lighthouse)\b/', $user_agent ) ) {
-				$request_host = (string) wp_cache_get( $this->request_ip, 'wp_simple_google_analytics_gethostbyaddr' );
-				if( '' === $request_host ) {
-					set_error_handler( array( $this, 'throwException' ) );
-					try {
-						// Pull all records at once to avoid multiple domain lookups
-						$request_host = strtolower( (string) gethostbyaddr( $this->request_ip ) );
-					} catch (Exception $e) {
-						// DNS server was unreachable
+				if( apply_filters( 'wp_simple_google_analytics_is_bot', true ) ) {
+					$request_host = (string) wp_cache_get( $this->request_ip, 'wp_simple_google_analytics_gethostbyaddr' );
+					if( '' === $request_host ) {
+						set_error_handler( array( $this, 'throwException' ) );
+						try {
+							// Pull all records at once to avoid multiple domain lookups
+							$request_host = strtolower( (string) gethostbyaddr( $this->request_ip ) );
+						} catch (Exception $e) {
+							// DNS server was unreachable
+						}
+						restore_error_handler();
+						wp_cache_set( $this->request_ip, $request_host, 'wp_simple_google_analytics_gethostbyaddr', DAY_IN_SECONDS );
 					}
-					restore_error_handler();
-					wp_cache_set( $this->request_ip, $request_host, 'wp_simple_google_analytics_gethostbyaddr', DAY_IN_SECONDS );
-				}
 
-				if( '' !== $request_host 
-					&& $this->request_ip !== $request_host 
-					// Allow google traffic for site verification, pagespeed insights, etc.
-					// Google Analytics filters google traffic out anyway.
-					&& 'google.com' !== substr( $request_host, -10 ) 
-					&& 'googlebot.com' !== substr( $request_host, -13 ) ) {
-					$this->do_not_track_reason = "Bot traffic detected or missing User Agent.";
-					return;
+					if( '' !== $request_host 
+						&& $this->request_ip !== $request_host 
+						// Allow google traffic for site verification, pagespeed insights, etc.
+						// Google Analytics filters google traffic out anyway.
+						&& 'google.com' !== substr( $request_host, -10 ) 
+						&& 'googlebot.com' !== substr( $request_host, -13 ) ) {
+						$this->do_not_track_reason = "Bot traffic detected or missing User Agent.";
+						return;
+					}
 				}
 			}
 		}
