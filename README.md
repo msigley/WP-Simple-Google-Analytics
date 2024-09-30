@@ -1,12 +1,19 @@
 [![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/A0A01FORH)
 # WP Simple Google Analytics
-Simple Google Analytics implementation for Wordpress that avoids using cookies and external javascript. 
+A Google Analytics 4 implementation for Wordpress that focuses on protecting visitor privacy.
 
-Localstorage is used instead of a tracking cookie if the browser implements it. If Localstorage is not available, a first party cookie is used.
+* All advertising, audience, and user personalization features are disabled.
+* GA client ids are generated locally on server and stored on the visitor's web browser using a first party cookie.
+* Sanitizes query vars in URLs sent to Google to Wordpress's publicly allowed query vars plus: `gclid, dclid, _gl`
+* Parses the following utm query vars and sets the appropriate GA campaign values: `utm_id, utm_source, utm_medium, utm_campaign, utm_source_platform, utm_term, utm_content`
+* Does not track traffic in the following situations to improve data accuracy in GA:
+  * Current user can edit posts.
+  * In admin area or responding to an ajax request.
+  * Invalid or internal IP addresses.
+  * Bot traffic detected or missing User Agent.
+    * Googlebot traffic is allowed for site verification, pagespeed insights, etc.
 
-A locally cached copy of analytics.js is printed using an inline script tag instead of referencing it externally from https://www.google-analytics.com/analytics.js. This copy of analytics.js is updated every 24 hours. If analytics.js is unable to be cached locally, it is referenced externally and marked as async to limit the affect on the site's first contentful paint time.
-
-Google Analytics USER-ID tracking is implemented by anonymizing the wordpress user id for logged in users.
+Because of the proactive privacy features and the disabling of advertising features, GA tracking does not need to be put behind a consent banner. This further improves the data accuracy in GA.
 
 ## Configuration
 Configuration is done by defining PHP constants in your /wp-config.php file. Below is an example configuration:
@@ -14,7 +21,7 @@ Configuration is done by defining PHP constants in your /wp-config.php file. Bel
 /**
  * Google Analytics Tracking
  */
-define('GOOGLE_ANALYTICS_TRACKING_ID', 'UA-NNNNNNNN-N');
+define('GOOGLE_ANALYTICS_TAG_ID', 'G-XXXXXXXXXX');
 define('GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS', false);
 define('GOOGLE_ANALYTICS_TRACK_BOTS', false);
 define('GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS',
@@ -26,14 +33,19 @@ define('GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS',
 );
 ```
 ### Configuration Options
-#### GOOGLE_ANALYTICS_TRACKING_ID
+#### GOOGLE_ANALYTICS_TAG_ID
 The Google Analytics Tracking ID you wish to use for this website.
+
+https://support.google.com/analytics/answer/9539598
+
 #### GOOGLE_ANALYTICS_TRACK_INTERNAL_IPS
 Whether or not internal IP addresses should be tracked. Defaults to false to avoid inflating the tracking with loopback requests. You may wish to turn this on to test your site while developing locally or if you have a proxy or CDN implemented on your website.
+
 #### GOOGLE_ANALYTICS_TRACK_BOTS
-Whether or not bot traffic should be tracked. Defaults to false to avoid inflating the tracking. Uses the user agent string to detect bots. Allow google traffic for site verification, pagespeed insights, etc. Google Analytics filters google traffic out anyway.
+Whether or not bot traffic should be tracked. Defaults to false to avoid inflating the tracking.
+
 #### GOOGLE_ANALYTICS_DO_NOT_TRACK_IPS
-Array of IPv4 addresses that will never be tracked. Useful to eliminate businesses from inflating the tracking with traffic coming from themseleves.
+Array of IP addresses that will never be tracked. Useful to eliminate businesses from inflating the tracking with traffic coming from themseleves. IPv4 addresses, IPv6 addresses, and IPv4 CIDR blocks are supported.
 
 ## Opt out link
 A link for your users to opt out of Google Analytics tracking is required by Google Analytics' terms of service. 
