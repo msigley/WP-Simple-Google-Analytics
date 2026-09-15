@@ -58,6 +58,9 @@ class WPSimpleGoogleAnalytics4 {
 	);
 
 	private $client_id = false;
+
+	public $track_events = NULL; // Needs to be public to allow other plugins to implement session storage
+
 	private $user_id = false;
 	private $user_data = NULL;
 
@@ -268,6 +271,14 @@ class WPSimpleGoogleAnalytics4 {
 	private function get_gtag_js_url() {
 		return $this->gtag_js_url . '?id=' . $this->tag_id;
 	}
+
+	public function track_event( $event, $data_obj ) {
+		if( !is_array( $this->track_events ) )
+			$this->track_events = array();
+
+		$this->track_events[ $event ] = $data_obj;
+	}
+
 	public function set_user_id( $user_id ) {
 		$this->user_id = $user_id;
 	}
@@ -287,6 +298,9 @@ class WPSimpleGoogleAnalytics4 {
 			?>
 			<!-- Google Analytics 4. Not tracking. <?php echo $this->do_not_track_reason; ?> -->
 			<?php
+
+			// Clean track events buffer
+			$this->track_events = null;
 			return;
 		}
 
@@ -376,6 +390,9 @@ class WPSimpleGoogleAnalytics4 {
 				gtag( 'config', '<?php echo $this->aw_tag_id; ?>', <?php echo json_encode( $config ); ?> );
 				gtag( 'consent', 'update', { analytics_storage: 'granted' } ); // Force analytics to be collected.
 				gtag( 'event', 'page_view' );
+				<?php foreach( $this->track_events as $name => $data ) : ?>
+					gtag( 'event', '<?php echo $name; ?>', <?php echo json_encode( $data ); ?> );
+				<?php endforeach; unset( $name, $data ); ?>
 			}
 
 			var load_gtag = function() {
@@ -393,6 +410,9 @@ class WPSimpleGoogleAnalytics4 {
 		</script>
 		<!-- End Google Analytics 4 -->
 		<?php
+
+		// Clean track events buffer
+		$this->track_events = null;
 	}
 
 	public function has_user_opted_out() {
