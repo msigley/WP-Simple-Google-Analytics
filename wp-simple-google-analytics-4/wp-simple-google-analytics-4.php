@@ -3,7 +3,7 @@
 Plugin Name: WP Simple Google Analytics 4
 Plugin URI: https://github.com/msigley
 Description: Simple Google Analytics 4 implementation that avoids using cookies and external javascript.
-Version: 2.0.7
+Version: 2.4.1
 Author: Matthew Sigley
 License: GPL2
 */
@@ -113,6 +113,8 @@ class WPSimpleGoogleAnalytics4 {
 		add_action( 'init', array( $this, 'add_shortcodes' ) );
 
 		add_filter( 'wp_headers', array( $this, 'add_referrer_policy_header' ) );
+
+		do_action( 'WPSimpleGoogleAnalytics4_init' );
 
 		if( empty( $this->tag_id ) ) {
 			$this->do_not_track_reason = 'Missing tag id.';
