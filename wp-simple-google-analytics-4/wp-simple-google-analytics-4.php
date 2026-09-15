@@ -17,6 +17,7 @@ class WPSimpleGoogleAnalytics4 {
 	const hash_byte_length = 4;
 
 	private $tag_id = null;
+	private $aw_tag_id = null;
 	private $debug = false;
 	private $gtag_js_url = 'https://www.googletagmanager.com/gtag/js';
 	private $gtag_js = null;
@@ -28,12 +29,34 @@ class WPSimpleGoogleAnalytics4 {
 	private $do_not_track_ips = false;
 	private $do_not_track_reason = false;
 	private $shortcodes = array( 'google_analytics_4_opt_out_link' );
-	private $utm_query_vars = array( 'utm_id' , 'utm_source', 'utm_medium', 'utm_campaign', 'utm_source_platform', 'utm_term', 'utm_content' );
+	// Map utm query vars to campaign values
+	// https://developers.google.com/analytics/devguides/collection/ga4/reference/config#campaign
+	private $utm_query_vars = array( 
+		'utm_id' => 'id',
+		'utm_source' => 'source',
+		'utm_medium' => 'medium', 
+		'utm_campaign' => 'name',
+		'utm_term' => 'term',
+		'utm_content' => 'content'
+	);
+	// Gtag consent mode url passthrough parameters:
+	// https://developers.google.com/tag-platform/security/guides/consent?consentmode=advanced#passthroughs
 	private $allowed_query_vars = array( 
+		// Google Ads auto-tagging
+		// https://support.google.com/google-ads/answer/3095550?hl=en
 		'gclid', // Google Click ID for Google Ads (AdWords)
 		'dclid', // DoubleClick Click ID for Google Display Ads
-		'_gl' 
-	); // Google Ads and url passthrough
+		'gclsrc', // Google Click Source for Google Ads (AdWords)
+		'wbraid', // Google Ads app-to-web measurement
+		// Google Analytics cross-domain measurement
+		// https://support.google.com/analytics/answer/10071811?hl=en
+		'_gl',
+		// Google Ads tracking
+		// https://support.google.com/google-ads/answer/16193746?hl=en-GB&ref_topic=10557216&sjid=1271667714883827805-NA
+		'gad_source',
+		'gad_campaignid'
+	);
+
 	private $client_id = false;
 
 	private function __construct() {
@@ -42,6 +65,9 @@ class WPSimpleGoogleAnalytics4 {
 
 		if( defined( 'GOOGLE_ANALYTICS_TAG_ID' ) )
 			$this->tag_id = GOOGLE_ANALYTICS_TAG_ID;
+
+		if( defined( 'GOOGLE_ADWORDS_TAG_ID' ) )
+			$this->aw_tag_id = GOOGLE_ADWORDS_TAG_ID;
 
 		if( defined( 'GOOGLE_ANALYTICS_DEBUG' ) )
 			$this->debug = !empty( GOOGLE_ANALYTICS_DEBUG );
@@ -252,6 +278,19 @@ class WPSimpleGoogleAnalytics4 {
 			return;
 		}
 
+		// Set is global settings
+		$set = new StdClass;
+		$set->client_id = $this->get_client_id();
+		if( $this->debug )
+			$set->debug_mode = true;
+
+		// Data privacy settings
+		// https://developers.google.com/tag-platform/security/concepts/consent-mode
+		$set->allow_google_signals = true; // Needed for Google Ads report
+		$set->allow_ad_personalization_signals = true; // Needed for Google Ads Remarketing
+		$set->restricted_data_processing = false; // We are denying personal identifying information by default below
+
+		// Default consent state
 		// Disable tracking except for analytics by gtag.js
 		$consent = new StdClass;
 		$consent->ad_storage = 'denied';
@@ -260,20 +299,11 @@ class WPSimpleGoogleAnalytics4 {
 		$consent->analytics_storage = 'granted';
 		$consent->functionality_storage = 'denied';
 		$consent->personalization_storage = 'denied';
-		$consent->security_storage = 'denied';
+		$consent->security_storage = 'granted';
 
-		// Set is global settings
-		$set = new StdClass;
-		$set->client_id = $this->get_client_id();
-		if( $this->debug )
-			$set->debug_mode = true;
-
-		// Data privacy settings
-		$set->allow_google_signals = true; // Needed for Google Ads report
-		$set->allow_ad_personalization_signals = false;
-		$set->restricted_data_processing = true;
-		$set->ads_data_redaction = true;
-		$set->url_passthrough = true;
+		// https://developers.google.com/tag-platform/security/guides/consent?consentmode=advanced
+		$set->ads_data_redaction = false; // Deletes data from Ads when a user's consent changes from 'granted' to 'denied'.
+		$set->url_passthrough = true; // Passthough ad click url parameters 
 
 		// In Google Analytics 4, IP masking is not necessary since IP addresses are not logged or stored.
 		// https://support.google.com/analytics/answer/9019185#IP
@@ -296,13 +326,12 @@ class WPSimpleGoogleAnalytics4 {
 		$query_string = parse_url( $this->self_uri(), PHP_URL_QUERY );
 		if( !empty( $query_string ) ) {
 			parse_str( $query_string, $query_vars );
-			foreach( $this->utm_query_vars as $utm_query_var ) {
+			foreach( $this->utm_query_vars as $utm_query_var => $campaign_var ) {
 				if( !isset( $query_vars[$utm_query_var] ) )
 					continue;
 				if( !isset( $set->campaign ) )
 					$set->campaign = new StdClass;
-				// Use substr() to remove the 'utm_' prefix in the set parameters.
-				$set->campaign->{ substr( $utm_query_var, 4 ) } = $query_vars[$utm_query_var];
+				$set->campaign->{ $campaign_var } = $query_vars[$utm_query_var];
 			}
 		}
 
@@ -312,6 +341,7 @@ class WPSimpleGoogleAnalytics4 {
 
 		// Config is GA only settings
 		$config = new StdClass;
+		$config->groups = 'default';
 		$config->send_page_view = false;
 		?>
 		<!-- Google Analytics 4 --> 
@@ -319,12 +349,14 @@ class WPSimpleGoogleAnalytics4 {
 			window.dataLayer = window.dataLayer || [];
 			function gtag(){ dataLayer.push(arguments); }
 
-			gtag( 'consent', 'update', <?php echo json_encode( $consent ); ?> ); // Use update instead of default to avoid consent managers overriding this.
+			gtag( 'consent', 'default', <?php echo json_encode( $consent ); ?> );
 			
 			var gtag_send = function(){
 				gtag( 'js', new Date() );
 				gtag( 'set', <?php echo json_encode( $set ); ?> );
 				gtag( 'config', '<?php echo $this->tag_id; ?>', <?php echo json_encode( $config ); ?> );
+				gtag( 'config', '<?php echo $this->aw_tag_id; ?>', <?php echo json_encode( $config ); ?> );
+				gtag( 'consent', 'update', { analytics_storage: 'granted' } ); // Force analytics to be collected.
 				gtag( 'event', 'page_view' );
 			}
 
