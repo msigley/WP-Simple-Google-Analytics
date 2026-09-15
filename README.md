@@ -1,4 +1,3 @@
-[![ko-fi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/A0A01FORH)
 # WP Simple Google Analytics
 A Google Analytics 4 implementation for Wordpress that focuses on protecting visitor privacy.
 
