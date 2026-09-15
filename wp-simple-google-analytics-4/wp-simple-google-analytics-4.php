@@ -58,6 +58,8 @@ class WPSimpleGoogleAnalytics4 {
 	);
 
 	private $client_id = false;
+	private $user_id = false;
+	private $user_data = NULL;
 
 	private function __construct() {
 		$wp_upload_dir_info = wp_upload_dir( null, false );
@@ -266,6 +268,16 @@ class WPSimpleGoogleAnalytics4 {
 	private function get_gtag_js_url() {
 		return $this->gtag_js_url . '?id=' . $this->tag_id;
 	}
+	public function set_user_id( $user_id ) {
+		$this->user_id = $user_id;
+	}
+
+	public function set_user_data( $name, $value ) {
+		if( !is_array( $this->user_data ) )
+			$this->user_data = array();
+
+		$this->user_data[ $name ] = $value;
+	}
 
 	public function print_analytics_js() {
 		if( current_user_can( 'edit_posts' ) )
@@ -339,10 +351,16 @@ class WPSimpleGoogleAnalytics4 {
 		$set->page_location = $this->sanitize_query_vars( $this->self_uri() );
 		$set->page_referrer = $this->sanitize_query_vars( (string) filter_input( INPUT_SERVER, 'HTTP_REFERER', FILTER_VALIDATE_URL, FILTER_FLAG_SCHEME_REQUIRED|FILTER_FLAG_HOST_REQUIRED ) );
 
+		// User data
+		if( $this->user_data !== NULL )
+			$set->user_data = $this->user_data;
+
 		// Config is GA only settings
 		$config = new StdClass;
 		$config->groups = 'default';
 		$config->send_page_view = false;
+		if( $this->user_id !== false )
+			$config->user_id = $this->user_id;
 		?>
 		<!-- Google Analytics 4 --> 
 		<script>
